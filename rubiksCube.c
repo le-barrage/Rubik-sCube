@@ -36,20 +36,18 @@ Queue queue;
 bool showHelp = false, showExitMessageBox = false, showOptions = false,
      isEverythingLoaded = false;
 
-char *enter = "Press 'Enter' to scramble the cube.";
-char *rotateFace =
-    "Press the corresponding key to move each face (Hold 'alt' down for "
-    "prime moves):";
-char *facesKey = "R (right), L (left), U (up), D (down), F (front), B (back).";
-char *solveKey =
-    "Press 'K' to find an optimal solution to the cube (only 3x3x3).";
-char *mouseRight =
-    "Press right mouse button to reset the cube to its original, solved state.";
-char *mouseMiddle = "Press middle mouse button to reset camera settings.";
-char *mouseLeft = "Hold left mouse button down to move the camera around.";
-char *spaceBar = "Press the space bar to start (or stop) the timer";
-char *cubeSize = "Press '-' or 'page down' to reduce the cube size and '+' or "
-                 "'page up' to increase it.";
+char *helpTexts[] = {
+    "Press 'Enter' to scramble the cube.",
+    "Press the corresponding key to move each face (Hold 'alt' down for prime "
+    "moves):",
+    "R (right), L (left), U (up), D (down), F (front), B (back).",
+    "Press 'K' to find an optimal solution to the cube (only 3x3x3).",
+    "Press right mouse button to reset the cube to its original, solved state.",
+    "Press middle mouse button to reset camera settings.",
+    "Hold left mouse button down to move the camera around.",
+    "Press the space bar to start (or stop) the timer.",
+    "Press '-' or 'page down' to reduce the cube size and '+' or 'page up' to "
+    "increase it."};
 
 Timer timer;
 Color timerColor = BLACK;
@@ -339,28 +337,34 @@ void drawHelpScreen() {
 
   ClearBackground(BACKGROUND_COLOR);
   DrawText("Press 'h' to exit.", 10, 10, 20, DARKGRAY);
-  DrawText(enter, GetScreenWidth() / 2 - MeasureText(enter, fontSize) / 2,
-           GetScreenHeight() / 2 - 200, fontSize, BLACK);
-  DrawText(rotateFace,
-           GetScreenWidth() / 2 - MeasureText(rotateFace, fontSize) / 2,
-           GetScreenHeight() / 2 - 150, fontSize, BLACK);
-  DrawText(facesKey, GetScreenWidth() / 2 - MeasureText(facesKey, fontSize) / 2,
-           GetScreenHeight() / 2 - 100, fontSize, BLACK);
-  DrawText(solveKey, GetScreenWidth() / 2 - MeasureText(solveKey, fontSize) / 2,
-           GetScreenHeight() / 2 - 50, fontSize, BLACK);
-  DrawText(mouseRight,
-           GetScreenWidth() / 2 - MeasureText(mouseRight, fontSize) / 2,
-           GetScreenHeight() / 2, fontSize, BLACK);
-  DrawText(mouseMiddle,
-           GetScreenWidth() / 2 - MeasureText(mouseMiddle, fontSize) / 2,
-           GetScreenHeight() / 2 + 50, fontSize, BLACK);
-  DrawText(mouseLeft,
-           GetScreenWidth() / 2 - MeasureText(mouseLeft, fontSize) / 2,
-           GetScreenHeight() / 2 + 100, fontSize, BLACK);
-  DrawText(spaceBar, GetScreenWidth() / 2 - MeasureText(spaceBar, fontSize) / 2,
-           GetScreenHeight() / 2 + 150, fontSize, BLACK);
-  DrawText(cubeSize, GetScreenWidth() / 2 - MeasureText(cubeSize, fontSize) / 2,
-           GetScreenHeight() / 2 + 200, fontSize, BLACK);
+  for (int i = 0; i < 9; i++) {
+    DrawText(helpTexts[i],
+             GetScreenWidth() / 2 - MeasureText(helpTexts[i], fontSize) / 2,
+             GetScreenHeight() / 2 - 200 + i * 50, fontSize, BLACK);
+  }
+}
+
+void rotationSpeedSlider() {
+  float r = (float)ROTATIONSPEED;
+  int sliderWidth = 150, sliderHeight = 30;
+  Rectangle sliderRectangle =
+      (Rectangle){.x = (float)(GetScreenWidth() - sliderWidth) / 2,
+                  .y = (float)(GetScreenHeight() - sliderHeight) / 2,
+                  .width = sliderWidth,
+                  .height = sliderHeight};
+
+  if (GuiSlider(sliderRectangle, "0", "30", &r, 1.f, 30.f)) {
+    ROTATIONSPEED = (int)r;
+  }
+  char *crs = "Cube Rotation Speed:";
+  DrawText(crs,
+           sliderRectangle.x +
+               (sliderRectangle.width - MeasureText(crs, 20)) / 2,
+           sliderRectangle.y - 30, 20, BLACK);
+  const char *rs = TextFormat("%d", ROTATIONSPEED);
+  DrawText(
+      rs, sliderRectangle.x + (sliderRectangle.width - MeasureText(rs, 20)) / 2,
+      sliderRectangle.y + sliderRectangle.height + 10, 20, BLACK);
 }
 
 // TODO: save options to a file
@@ -369,25 +373,7 @@ void drawOptionsScreen() {
   int textWidth = MeasureText("Press 'o' to exit.", 20);
   DrawText("Press 'o' to exit.", GetScreenWidth() - textWidth - 10, 10, 20,
            DARKGRAY);
-  float r = (float)ROTATIONSPEED;
-  int sliderWidth = 150, sliderHeight = 30;
-  Rectangle sliderRectangle =
-      (Rectangle){.x = (float)(GetScreenWidth() - sliderWidth) / 2,
-                  .y = (float)(GetScreenHeight() - sliderHeight) / 2,
-                  .width = sliderWidth,
-                  .height = sliderHeight};
-  if (GuiSlider(sliderRectangle, "0", "30", &r, 1.f, 30.f)) {
-    ROTATIONSPEED = (int)r;
-  }
-  DrawText(
-      "Cube Rotation Speed:",
-      sliderRectangle.x +
-          (sliderRectangle.width - MeasureText("Cube Rotation Speed:", 20)) / 2,
-      sliderRectangle.y - 30, 20, BLACK);
-  DrawText(TextFormat("%d", ROTATIONSPEED),
-           sliderRectangle.x + sliderRectangle.width / 2 -
-               MeasureText(TextFormat("%d", ROTATIONSPEED), 20) / 2,
-           sliderRectangle.y + sliderRectangle.height + 10, 20, BLACK);
+  rotationSpeedSlider();
 }
 
 void DrawTextBoxed(const char *text, float fontSize, int y) {
