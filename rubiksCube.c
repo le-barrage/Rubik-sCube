@@ -33,7 +33,8 @@ char **scramble, *currentScramble, currentSolution[76], solutionFoundText[45],
 int currentSolutionSize;
 Queue queue;
 
-bool showHelp = false, showExitMessageBox = false, isEverythingLoaded = false;
+bool showHelp = false, showExitMessageBox = false, showOptions = false,
+     isEverythingLoaded = false;
 
 char *enter = "Press 'Enter' to scramble the cube.";
 char *rotateFace =
@@ -362,6 +363,33 @@ void drawHelpScreen() {
            GetScreenHeight() / 2 + 200, fontSize, BLACK);
 }
 
+// TODO: save options to a file
+void drawOptionsScreen() {
+  ClearBackground(BACKGROUND_COLOR);
+  int textWidth = MeasureText("Press 'o' to exit.", 20);
+  DrawText("Press 'o' to exit.", GetScreenWidth() - textWidth - 10, 10, 20,
+           DARKGRAY);
+  float r = (float)ROTATIONSPEED;
+  int sliderWidth = 150, sliderHeight = 30;
+  Rectangle sliderRectangle =
+      (Rectangle){.x = (float)(GetScreenWidth() - sliderWidth) / 2,
+                  .y = (float)(GetScreenHeight() - sliderHeight) / 2,
+                  .width = sliderWidth,
+                  .height = sliderHeight};
+  if (GuiSlider(sliderRectangle, "0", "30", &r, 1.f, 30.f)) {
+    ROTATIONSPEED = (int)r;
+  }
+  DrawText(
+      "Cube Rotation Speed:",
+      sliderRectangle.x +
+          (sliderRectangle.width - MeasureText("Cube Rotation Speed:", 20)) / 2,
+      sliderRectangle.y - 30, 20, BLACK);
+  DrawText(TextFormat("%d", ROTATIONSPEED),
+           sliderRectangle.x + sliderRectangle.width / 2 -
+               MeasureText(TextFormat("%d", ROTATIONSPEED), 20) / 2,
+           sliderRectangle.y + sliderRectangle.height + 10, 20, BLACK);
+}
+
 void DrawTextBoxed(const char *text, float fontSize, int y) {
   if (strlen(text) == 0)
     return;
@@ -403,6 +431,9 @@ void drawCubeScreen() {
   EndMode3D();
 
   DrawText("Press 'h' for help.", 10, 10, 20, DARKGRAY);
+  int textWidth = MeasureText("Press 'o' for options. ", 20);
+  DrawText("Press 'o' for options.", GetScreenWidth() - textWidth - 10, 10, 20,
+           DARKGRAY);
 
   DrawText("Current scramble:",
            GetScreenWidth() / 2 - MeasureText("Current scramble:", 30) / 2, 10,
@@ -553,10 +584,12 @@ int main(int argc, char **argv) {
       Cube_applyMove(&cube, argv[i]);
 
   while (!WindowShouldClose()) {
-    if (IsKeyPressed(KEY_H))
+    if (IsKeyPressed(KEY_H) && !showOptions)
       showHelp = !showHelp;
+    else if (IsKeyPressed(KEY_O) && !showHelp)
+      showOptions = !showOptions;
 
-    if (!showHelp) {
+    if (!showHelp && !showOptions) {
       handleMouseMovementAndUpdateCamera();
       handleKeyPress();
       handleQueue();
@@ -565,6 +598,8 @@ int main(int argc, char **argv) {
     BeginDrawing();
     if (showHelp)
       drawHelpScreen();
+    else if (showOptions)
+      drawOptionsScreen();
     else
       drawCubeScreen();
     if (showExitMessageBox) {

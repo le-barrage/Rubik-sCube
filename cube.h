@@ -3,7 +3,7 @@
 
 #include "cublet.h"
 
-extern int SIZE;
+extern int SIZE, ROTATIONSPEED;
 
 typedef enum Rotations {
   U,
