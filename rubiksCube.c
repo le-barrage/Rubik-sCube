@@ -47,7 +47,9 @@ char *helpTexts[] = {
     "Hold left mouse button down to move the camera around.",
     "Press the space bar to start (or stop) the timer.",
     "Press '-' or 'page down' to reduce the cube size and '+' or 'page up' to "
-    "increase it."};
+    "increase it.",
+};
+int helpTextsSize = 9;
 
 Timer timer;
 Color timerColor = BLACK;
@@ -337,10 +339,12 @@ void drawHelpScreen() {
 
   ClearBackground(BACKGROUND_COLOR);
   DrawText("Press 'h' to exit.", 10, 10, 20, DARKGRAY);
-  for (int i = 0; i < 9; i++) {
+  int heightRoomForText = 50;
+  int startY = GetScreenHeight() / 2 - helpTextsSize / 2 * 50;
+  for (int i = 0; i < helpTextsSize; i++) {
     DrawText(helpTexts[i],
              GetScreenWidth() / 2 - MeasureText(helpTexts[i], fontSize) / 2,
-             GetScreenHeight() / 2 - 200 + i * 50, fontSize, BLACK);
+             startY + i * heightRoomForText, fontSize, BLACK);
   }
 }
 
