@@ -33,6 +33,8 @@ char **scramble, *currentScramble, currentSolution[76], solutionFoundText[45],
     times[5][20], avg[10];
 int currentSolutionSize;
 Queue queue;
+bool isSolutionRunning = false, isThreadLaunched = false;
+pthread_t solutionThread;
 
 bool showHelp = false, showExitMessageBox = false, showOptions = false,
      isEverythingLoaded = false;
@@ -56,7 +58,7 @@ Timer timer;
 Color timerColor = BLACK;
 char timerString[10] = "00:00.000";
 
-bool show = false, isSolutionRunning = false;
+bool show = false;
 int timeToShow = -1, posYToShow = 0;
 
 void handleRotation(Rotation clockwise, Rotation antiClockwise) {
@@ -121,7 +123,7 @@ int findSolutionAndUpdateMoves(Cube *cube, int depthLimit, int timeOut) {
   return 0;
 }
 
-void *findSolutionAndUpdateCurrentSolution(void *thread) {
+void *findSolutionAndUpdateCurrentSolution() {
   if (SIZE != 3) {
     snprintf(currentSolution, 41, "The algorithm only works on 3x3x3 cubes.");
     return NULL;
@@ -147,7 +149,7 @@ void *findSolutionAndUpdateCurrentSolution(void *thread) {
            (int)elapsed_time_ms);
 
   printf("Solution found in ~%d milliseconds\n", (int)elapsed_time_ms);
-  pthread_join(*(pthread_t *)thread, NULL);
+  isThreadLaunched = false;
   return NULL;
 }
 
@@ -260,10 +262,16 @@ void handleKeyPress() {
   else if (IsKeyPressed(KEY_ENTER))
     generateNewScramble();
   else if (IsKeyPressed(KEY_K)) {
-    pthread_t thread;
-    pthread_create(&thread, NULL, findSolutionAndUpdateCurrentSolution,
-                   (void *)(&thread));
-    // findSolutionAndUpdateCurrentSolution();
+    if (isThreadLaunched)
+      return;
+    isThreadLaunched = true;
+    int error = pthread_create(&solutionThread, NULL,
+                               findSolutionAndUpdateCurrentSolution, NULL);
+    if (error != 0) {
+      printf("Error creating thread: %s\n", strerror(error));
+      return;
+    }
+    pthread_detach(solutionThread);
   } else if (IsKeyDown(KEY_SPACE) && !timer.isDisabled) {
     if (!timer.isRunning && !timer.justStopped)
       timerColor = (Color){0, 204, 51, 255};
@@ -606,7 +614,7 @@ int main(int argc, char **argv) {
 
       if (result == 1)
         break;
-      else if (result == 2)
+      else if (result == 2 || result == 0)
         showExitMessageBox = false;
     }
     EndDrawing();
