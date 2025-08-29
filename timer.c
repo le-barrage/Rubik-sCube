@@ -1,6 +1,7 @@
 #include "timer.h"
 #include <pthread.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -10,7 +11,8 @@ Timer Timer_make() {
                  .milliseconds = 0,
                  .startTime = {0},
                  .isRunning = false,
-                 .justStopped = false};
+                 .justStopped = false,
+                 .isDisabled = false};
 }
 
 void *threadFunction(void *arg) {
@@ -50,3 +52,7 @@ void Timer_stop(Timer *timer) {
   timer->justStopped = true;
   pthread_join(timer->thread, NULL);
 }
+
+void Timer_disable(Timer *timer) { timer->isDisabled = true; }
+
+void Timer_enable(Timer *timer) { timer->isDisabled = false; }

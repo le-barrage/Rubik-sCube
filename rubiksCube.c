@@ -4,18 +4,23 @@
 #include "kociemba/coordCube.h"
 #include "kociemba/enums.h"
 #include "kociemba/twoPhase.h"
+#include "queue.h"
 #include "scramble.h"
 #include "timer.h"
 #include "utils.h"
+#include <ctype.h>
+#include <pthread.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#if defined(PLATFORM_WEB)
+#include <emscripten/emscripten.h>
+#endif
+
 #define RAYGUI_IMPLEMENTATION
 #include "include/raygui.h"
-
-char textTest[64] = "Some text.";
 
 #define CUBIE_SIZE 0.9
 #define BACKGROUND_COLOR GRAY
@@ -28,26 +33,30 @@ float camera_phi;
 Camera camera = {{0}, {0, 0, 0}, {0, 1, 0}, 90, CAMERA_PERSPECTIVE};
 
 Cube cube;
-char **scramble, *currentScramble, currentSolution[76], solutionFoundText[30],
+char **scramble, *currentScramble, currentSolution[76], solutionFoundText[45],
     times[5][20], avg[10];
 int currentSolutionSize;
+Queue queue;
+bool isSolutionRunning = false, isThreadLaunched = false;
+pthread_t solutionThread;
 
-bool showHelp = false, showExitMessageBox = false, isEverythingLoaded = false;
+bool showHelp = false, showExitMessageBox = false, showOptions = false,
+     isEverythingLoaded = false;
 
-char *enter = "Press 'Enter' to scramble the cube.";
-char *rotateFace =
-    "Press the corresponding key to move each face (Hold 'alt' down for "
-    "prime moves):";
-char *facesKey = "R (right), L (left), U (up), D (down), F (front), B (back).";
-char *solveKey =
-    "Press 'K' to find an optimal solution to the cube (only 3x3x3).";
-char *mouseRight =
-    "Press right mouse button to reset the cube to its original, solved state.";
-char *mouseMiddle = "Press middle mouse button to reset camera settings.";
-char *mouseLeft = "Hold left mouse button down to move the camera around.";
-char *spaceBar = "Press the space bar to start (or stop) the timer";
-char *cubeSize = "Press '-' or 'page down' to reduce the cube size and '+' or "
-                 "'page up' to increase it.";
+char *helpTexts[] = {
+    "Press 'Enter' to scramble the cube.",
+    "Press the corresponding key to move each face (Hold 'alt' down for prime "
+    "moves):",
+    "R (right), L (left), U (up), D (down), F (front), B (back).",
+    "Press 'K' to find an optimal solution to the cube (only 3x3x3).",
+    "Press right mouse button to reset the cube to its original, solved state.",
+    "Press middle mouse button to reset camera settings.",
+    "Hold left mouse button down to move the camera around.",
+    "Press the space bar to start (or stop) the timer.",
+    "Press '-' or 'page down' to reduce the cube size and '+' or 'page up' to "
+    "increase it.",
+};
+int helpTextsSize = 9;
 
 Timer timer;
 Color timerColor = BLACK;
@@ -56,11 +65,15 @@ char timerString[10] = "00:00.000";
 bool show = false;
 int timeToShow = -1, posYToShow = 0;
 
+bool exitProgram = false;
+
 void handleRotation(Rotation clockwise, Rotation antiClockwise) {
+  if (isSolutionRunning)
+    return;
   if (IsKeyDown(KEY_LEFT_ALT))
-    Cube_rotate(&cube, antiClockwise, 1);
+    Queue_add(&queue, antiClockwise);
   else
-    Cube_rotate(&cube, clockwise, 1);
+    Queue_add(&queue, clockwise);
 }
 
 void applyMovesAndUpdateCurrentScramble() {
@@ -116,10 +129,11 @@ int findSolutionAndUpdateMoves(Cube *cube, int depthLimit, int timeOut) {
   return 0;
 }
 
-void findSolutionAndUpdateCurrentSolution() {
+void *findSolutionAndUpdateCurrentSolution() {
   if (SIZE != 3) {
     snprintf(currentSolution, 41, "The algorithm only works on 3x3x3 cubes.");
-    return;
+    isThreadLaunched = false;
+    return NULL;
   }
 
   struct timespec start, now;
@@ -131,16 +145,20 @@ void findSolutionAndUpdateCurrentSolution() {
   clock_gettime(CLOCK_MONOTONIC, &now);
   if (error != 0) {
     snprintf(currentSolution, 75, "%s", printErrorMessage(error));
-    return;
+    isThreadLaunched = false;
+    return NULL;
   }
-
-  snprintf(solutionFoundText, 30,
-           "Solution found in %d moves:", currentSolutionSize);
 
   long long elapsed_time_ns = (now.tv_sec - start.tv_sec) * 1000000000LL +
                               (now.tv_nsec - start.tv_nsec);
   double elapsed_time_ms = (double)elapsed_time_ns / 1000000.0;
+  snprintf(solutionFoundText, 45,
+           "%d moves solution found in ~%d milliseconds:", currentSolutionSize,
+           (int)elapsed_time_ms);
+
   printf("Solution found in ~%d milliseconds\n", (int)elapsed_time_ms);
+  isThreadLaunched = false;
+  return NULL;
 }
 
 void clearCurrentScrambleAndSolution() {
@@ -149,12 +167,19 @@ void clearCurrentScrambleAndSolution() {
   currentSolutionSize = 0;
 }
 
+void resetAnimationAndSolution() {
+  cube.isAnimating = false;
+  Queue_clear(&queue);
+}
+
 void generateNewScramble() {
   clearCurrentScrambleAndSolution();
+  resetAnimationAndSolution();
   Cube_free(cube);
   cube = Cube_make(CUBIE_SIZE);
   generateScramble(scramble, SIZE);
   applyMovesAndUpdateCurrentScramble();
+  timer.isDisabled = false;
 }
 
 void initCameraSettings() {
@@ -169,6 +194,7 @@ void initCurrentScrambleAndSolution() {
   scramble = malloc(SCRAMBLE_SIZE * sizeof(char *));
   currentScramble = malloc((6 * SCRAMBLE_SIZE + 1) * sizeof(char));
   clearCurrentScrambleAndSolution();
+  resetAnimationAndSolution();
   avg[0] = '\0';
 }
 
@@ -177,7 +203,7 @@ void resizeCube(int increment) {
   free(scramble);
   Cube_free(cube);
 
-  SIZE += (SIZE == 11 && increment > 0) || (SIZE == 1 && increment < 0)
+  SIZE += (SIZE == MAXSIZE && increment > 0) || (SIZE == 1 && increment < 0)
               ? 0
               : increment;
 
@@ -186,6 +212,34 @@ void resizeCube(int increment) {
   initCameraSettings();
 
   getTimes(times, SIZE);
+}
+
+// TODO: Make this function more readable (change if)
+void applyCurrentSolution() {
+  Timer_disable(&timer);
+  isSolutionRunning = true;
+  currentSolutionSize = 0;
+  int i = 0;
+  char rotation;
+  while (currentSolution[i] != '\0') {
+    char currMove = currentSolution[i], nextMove = currentSolution[i + 1];
+    if (currMove == ' ') {
+      i++;
+      continue;
+    }
+    if (nextMove == '\'') {
+      rotation = tolower(currMove);
+      i++;
+    } else if (nextMove == '2') {
+      Queue_add(&queue, getCorrespondingRotation(currMove));
+      rotation = currMove;
+      i++;
+    } else {
+      rotation = currMove;
+    }
+    Queue_add(&queue, getCorrespondingRotation(rotation));
+    i++;
+  }
 }
 
 void handleKeyPress() {
@@ -215,15 +269,24 @@ void handleKeyPress() {
     handleRotation(Z, z);
   else if (IsKeyPressed(KEY_ENTER))
     generateNewScramble();
-  else if (IsKeyPressed(KEY_K))
-    findSolutionAndUpdateCurrentSolution();
-  else if (IsKeyDown(KEY_SPACE)) {
+  else if (IsKeyPressed(KEY_K)) {
+    if (isThreadLaunched)
+      return;
+    isThreadLaunched = true;
+    int error = pthread_create(&solutionThread, NULL,
+                               findSolutionAndUpdateCurrentSolution, NULL);
+    if (error != 0) {
+      printf("Error creating thread: %s\n", strerror(error));
+      return;
+    }
+    pthread_detach(solutionThread);
+  } else if (IsKeyDown(KEY_SPACE) && !timer.isDisabled) {
     if (!timer.isRunning && !timer.justStopped)
       timerColor = (Color){0, 204, 51, 255};
-    else {
+    else if (!timer.justStopped) {
       Timer_stop(&timer);
     }
-  } else if (IsKeyReleased(KEY_SPACE)) {
+  } else if (IsKeyReleased(KEY_SPACE) && !timer.isDisabled) {
     if (timer.justStopped) {
       storeTime(timerString, SIZE);
       getTimes(times, SIZE);
@@ -243,11 +306,26 @@ void handleKeyPress() {
     showExitMessageBox = true;
 }
 
+void handleQueue() {
+  if (cube.isAnimating)
+    return;
+  if (Queue_isEmpty(&queue)) {
+    if (isSolutionRunning) {
+      isSolutionRunning = false;
+      timer.isDisabled = false;
+    }
+    return;
+  }
+  cube.isAnimating = true;
+  cube.currentRotation = Queue_pop(&queue);
+}
+
 void handleMouseMovementAndUpdateCamera() {
   if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
     Cube_free(cube);
     cube = Cube_make(CUBIE_SIZE);
     clearCurrentScrambleAndSolution();
+    resetAnimationAndSolution();
   } else if (IsMouseButtonPressed(MOUSE_BUTTON_MIDDLE)) {
     initCameraSettings();
   }
@@ -283,28 +361,45 @@ void drawHelpScreen() {
 
   ClearBackground(BACKGROUND_COLOR);
   DrawText("Press 'h' to exit.", 10, 10, 20, DARKGRAY);
-  DrawText(enter, GetScreenWidth() / 2 - MeasureText(enter, fontSize) / 2,
-           GetScreenHeight() / 2 - 200, fontSize, BLACK);
-  DrawText(rotateFace,
-           GetScreenWidth() / 2 - MeasureText(rotateFace, fontSize) / 2,
-           GetScreenHeight() / 2 - 150, fontSize, BLACK);
-  DrawText(facesKey, GetScreenWidth() / 2 - MeasureText(facesKey, fontSize) / 2,
-           GetScreenHeight() / 2 - 100, fontSize, BLACK);
-  DrawText(solveKey, GetScreenWidth() / 2 - MeasureText(solveKey, fontSize) / 2,
-           GetScreenHeight() / 2 - 50, fontSize, BLACK);
-  DrawText(mouseRight,
-           GetScreenWidth() / 2 - MeasureText(mouseRight, fontSize) / 2,
-           GetScreenHeight() / 2, fontSize, BLACK);
-  DrawText(mouseMiddle,
-           GetScreenWidth() / 2 - MeasureText(mouseMiddle, fontSize) / 2,
-           GetScreenHeight() / 2 + 50, fontSize, BLACK);
-  DrawText(mouseLeft,
-           GetScreenWidth() / 2 - MeasureText(mouseLeft, fontSize) / 2,
-           GetScreenHeight() / 2 + 100, fontSize, BLACK);
-  DrawText(spaceBar, GetScreenWidth() / 2 - MeasureText(spaceBar, fontSize) / 2,
-           GetScreenHeight() / 2 + 150, fontSize, BLACK);
-  DrawText(cubeSize, GetScreenWidth() / 2 - MeasureText(cubeSize, fontSize) / 2,
-           GetScreenHeight() / 2 + 200, fontSize, BLACK);
+  int heightRoomForText = 50;
+  int startY = GetScreenHeight() / 2 - helpTextsSize / 2 * 50;
+  for (int i = 0; i < helpTextsSize; i++) {
+    DrawText(helpTexts[i],
+             GetScreenWidth() / 2 - MeasureText(helpTexts[i], fontSize) / 2,
+             startY + i * heightRoomForText, fontSize, BLACK);
+  }
+}
+
+void rotationSpeedSlider() {
+  float r = (float)ROTATIONSPEED;
+  int sliderWidth = 150, sliderHeight = 30;
+  Rectangle sliderRectangle =
+      (Rectangle){.x = (float)(GetScreenWidth() - sliderWidth) / 2,
+                  .y = (float)(GetScreenHeight() - sliderHeight) / 2,
+                  .width = sliderWidth,
+                  .height = sliderHeight};
+
+  if (GuiSlider(sliderRectangle, "0", "30", &r, 1.f, 30.f)) {
+    ROTATIONSPEED = (int)r;
+  }
+  char *crs = "Cube Rotation Speed:";
+  DrawText(crs,
+           sliderRectangle.x +
+               (sliderRectangle.width - MeasureText(crs, 20)) / 2,
+           sliderRectangle.y - 30, 20, BLACK);
+  const char *rs = TextFormat("%d", ROTATIONSPEED);
+  DrawText(
+      rs, sliderRectangle.x + (sliderRectangle.width - MeasureText(rs, 20)) / 2,
+      sliderRectangle.y + sliderRectangle.height + 10, 20, BLACK);
+}
+
+// TODO: save options to a file
+void drawOptionsScreen() {
+  ClearBackground(BACKGROUND_COLOR);
+  int textWidth = MeasureText("Press 'o' to exit.", 20);
+  DrawText("Press 'o' to exit.", GetScreenWidth() - textWidth - 10, 10, 20,
+           DARKGRAY);
+  rotationSpeedSlider();
 }
 
 void DrawTextBoxed(const char *text, float fontSize, int y) {
@@ -341,13 +436,16 @@ void drawCubeScreen() {
   DrawLine3D(Vector3Zero(), (Vector3){(float)SIZE / 2 + 2, 0, 0}, WHITE);
   DrawLine3D(Vector3Zero(), (Vector3){0, (float)SIZE / 2 + 2, 0}, WHITE);
   DrawLine3D(Vector3Zero(), (Vector3){0, 0, (float)SIZE / 2 + 2}, WHITE);
-  DrawCube((Vector3){0}, SIZE - (1 - CUBIE_SIZE) - 0.05,
-           SIZE - (1 - CUBIE_SIZE) - 0.05, SIZE - (1 - CUBIE_SIZE) - 0.05,
-           BLACK);
+  // DrawCube((Vector3){0}, SIZE - (1 - CUBIE_SIZE) - 0.05,
+  //          SIZE - (1 - CUBIE_SIZE) - 0.05, SIZE - (1 - CUBIE_SIZE) - 0.05,
+  //          BLACK);
   Cube_drawCube(&cube);
   EndMode3D();
 
   DrawText("Press 'h' for help.", 10, 10, 20, DARKGRAY);
+  int textWidth = MeasureText("Press 'o' for options. ", 20);
+  DrawText("Press 'o' for options.", GetScreenWidth() - textWidth - 10, 10, 20,
+           DARKGRAY);
 
   DrawText("Current scramble:",
            GetScreenWidth() / 2 - MeasureText("Current scramble:", 30) / 2, 10,
@@ -375,7 +473,6 @@ void drawCubeScreen() {
     if (GuiLabelButton((Rectangle){10, (float)GetScreenHeight() / 2 + posY * 30,
                                    MeasureText(times[i], 20), 20},
                        times[i])) {
-      printf("%d\n", i);
       show = !show;
       timeToShow = i;
       posYToShow = posY;
@@ -401,6 +498,29 @@ void drawCubeScreen() {
       getAverageOf5(times, avg);
       show = !show;
     }
+  }
+
+  if (currentSolutionSize > 0) {
+    int recW = 100, recH = 30;
+    Rectangle rec = (Rectangle){.x = GetScreenWidth() - 2 * recW,
+                                .y = GetScreenHeight() - 100,
+                                .width = recW,
+                                .height = recH};
+    if (CheckCollisionPointRec(GetMousePosition(), rec)) {
+      SetMouseCursor(MOUSE_CURSOR_POINTING_HAND);
+      DrawRectangleRounded(rec, 0.5, 0, ColorBrightness(DARKGRAY, -.1f));
+      if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+        applyCurrentSolution();
+        SetMouseCursor(MOUSE_CURSOR_DEFAULT);
+      }
+    } else {
+      SetMouseCursor(MOUSE_CURSOR_DEFAULT);
+      DrawRectangleRounded(rec, 0.5, 0, ColorBrightness(DARKGRAY, .1f));
+    }
+    float fontSize = 20;
+    float textWidth = MeasureText("Apply", fontSize);
+    DrawText("Apply", rec.x + rec.width / 2 - textWidth / 2,
+             rec.y + rec.height / 2 - fontSize / 2, fontSize, BLACK);
   }
 }
 
@@ -431,6 +551,7 @@ void *initEverything() {
   init();
 
   initCameraSettings();
+  queue = Queue_make();
 
   timer = Timer_make();
   getTimes(times, SIZE);
@@ -444,7 +565,41 @@ void *initEverything() {
   return NULL;
 }
 
+void UpdateDrawFrame() {
+  if (IsKeyPressed(KEY_H) && !showOptions)
+    showHelp = !showHelp;
+  else if (IsKeyPressed(KEY_O) && !showHelp)
+    showOptions = !showOptions;
+
+  if (!showHelp && !showOptions) {
+    handleMouseMovementAndUpdateCamera();
+    handleKeyPress();
+    handleQueue();
+  }
+
+  BeginDrawing();
+  if (showHelp)
+    drawHelpScreen();
+  else if (showOptions)
+    drawOptionsScreen();
+  else
+    drawCubeScreen();
+  if (showExitMessageBox) {
+    int result =
+        GuiMessageBox((Rectangle){(float)GetScreenWidth() / 2 - 200,
+                                  (float)GetScreenHeight() / 2 - 75, 400, 150},
+                      "#191#Exit", "Do you really want to quit ?", "Yes;No");
+
+    if (result == 1)
+      exitProgram = true;
+    else if (result == 2 || result == 0)
+      showExitMessageBox = false;
+  }
+  EndDrawing();
+}
+
 int main(int argc, char **argv) {
+  printf("Rubik's Cube v1.0\n");
   SetTraceLogLevel(LOG_WARNING);
 
   SetConfigFlags(FLAG_WINDOW_RESIZABLE);
@@ -474,34 +629,16 @@ int main(int argc, char **argv) {
     for (int i = 1; i < argc; i++)
       Cube_applyMove(&cube, argv[i]);
 
+#if defined(PLATFORM_WEB)
+  emscripten_set_main_loop(UpdateDrawFrame, 0, 1);
+#else
+
   while (!WindowShouldClose()) {
-    if (IsKeyPressed(KEY_H))
-      showHelp = !showHelp;
-
-    if (!showHelp) {
-      handleMouseMovementAndUpdateCamera();
-      handleKeyPress();
-    }
-
-    BeginDrawing();
-    if (showHelp)
-      drawHelpScreen();
-    else
-      drawCubeScreen();
-    if (showExitMessageBox) {
-      int result = GuiMessageBox(
-          (Rectangle){(float)GetScreenWidth() / 2 - 200,
-                      (float)GetScreenHeight() / 2 - 75, 400, 150},
-          "#191#Exit", "Do you really want to quit ?", "Yes;No");
-      printf("%d\n", result);
-
-      if (result == 1)
-        break;
-      else if (result == 2)
-        showExitMessageBox = false;
-    }
-    EndDrawing();
+    UpdateDrawFrame();
+    if (exitProgram)
+      break;
   }
+#endif
 
   free(currentScramble);
   free(scramble);

@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-int SIZE = 3;
+int SIZE = 3, MAXSIZE = 9, ROTATIONSPEED = 25;
 
 bool isInnerCubie(float x, float y, float z) {
   return x != 0 && y != 0 && z != 0 && x != SIZE - 1 && y != SIZE - 1 &&
@@ -27,6 +27,9 @@ Cube Cube_make(float cubletSize) {
       }
     }
   }
+  cube.isAnimating = false;
+  cube.rotationDegrees = 0;
+  cube.currentRotation = -1;
   return cube;
 }
 
@@ -40,16 +43,101 @@ void Cube_free(Cube cube) {
   free(cube.cube);
 }
 
+void handleAnimating(Cube *cube) {
+  if (cube->isAnimating)
+    cube->rotationDegrees += ROTATIONSPEED;
+  if (cube->rotationDegrees > 90) {
+    cube->rotationDegrees = 0;
+    cube->isAnimating = false;
+    Cube_rotate(cube, cube->currentRotation, 1);
+    cube->currentRotation = -1;
+  }
+}
+
+Vector3 getRotationVector(Rotation rotation, int posX, int posY, int posZ) {
+  switch (rotation) {
+  case X:
+    return (Vector3){-1, 0, 0};
+  case x:
+    return (Vector3){1, 0, 0};
+  case Y:
+    return (Vector3){0, -1, 0};
+  case y:
+    return (Vector3){0, 1, 0};
+  case Z:
+    return (Vector3){0, 0, -1};
+  case z:
+    return (Vector3){0, 0, 1};
+  case U:
+    return (posY == SIZE - 1) ? (Vector3){0, -1, 0} : (Vector3){0, 0, 0};
+  case u:
+    return (posY == SIZE - 1) ? (Vector3){0, 1, 0} : (Vector3){0, 0, 0};
+  case D:
+    return (posY == 0) ? (Vector3){0, 1, 0} : (Vector3){0, 0, 0};
+  case d:
+    return (posY == 0) ? (Vector3){0, -1, 0} : (Vector3){0, 0, 0};
+  case E:
+    return (0 < posY && posY < SIZE - 1) ? (Vector3){0, 1, 0}
+                                         : (Vector3){0, 0, 0};
+  case e:
+    return (0 < posY && posY < SIZE - 1) ? (Vector3){0, -1, 0}
+                                         : (Vector3){0, 0, 0};
+  case R:
+    return (posX == SIZE - 1) ? (Vector3){-1, 0, 0} : (Vector3){0, 0, 0};
+  case r:
+    return (posX == SIZE - 1) ? (Vector3){1, 0, 0} : (Vector3){0, 0, 0};
+  case L:
+    return (posX == 0) ? (Vector3){1, 0, 0} : (Vector3){0, 0, 0};
+  case l:
+    return (posX == 0) ? (Vector3){-1, 0, 0} : (Vector3){0, 0, 0};
+  case M:
+    return (0 < posX && posX < SIZE - 1) ? (Vector3){1, 0, 0}
+                                         : (Vector3){0, 0, 0};
+  case m:
+    return (0 < posX && posX < SIZE - 1) ? (Vector3){-1, 0, 0}
+                                         : (Vector3){0, 0, 0};
+  case F:
+    return (posZ == SIZE - 1) ? (Vector3){0, 0, -1} : (Vector3){0, 0, 0};
+  case f:
+    return (posZ == SIZE - 1) ? (Vector3){0, 0, 1} : (Vector3){0, 0, 0};
+  case B:
+    return (posZ == 0) ? (Vector3){0, 0, 1} : (Vector3){0, 0, 0};
+  case b:
+    return (posZ == 0) ? (Vector3){0, 0, -1} : (Vector3){0, 0, 0};
+  case S:
+    return (0 < posZ && posZ < SIZE - 1) ? (Vector3){0, 0, -1}
+                                         : (Vector3){0, 0, 0};
+  case s:
+    return (0 < posZ && posZ < SIZE - 1) ? (Vector3){0, 0, 1}
+                                         : (Vector3){0, 0, 0};
+  default:
+    return (Vector3){0, 0, 0};
+  }
+}
+
+void handleAnimation(Cube *cube, int posX, int posY, int posZ) {
+  Vector3 position =
+      (Vector3){posX - (float)SIZE / 2 + 0.5f, posY - (float)SIZE / 2 + 0.5f,
+                posZ - (float)SIZE / 2 + 0.5f};
+
+  Vector3 direction =
+      getRotationVector(cube->currentRotation, posX, posY, posZ);
+  int rotationDegrees =
+      (direction.x == 0 && direction.y == 0 && direction.z == 0)
+          ? 0
+          : cube->rotationDegrees;
+  Cubie_drawCubie(&cube->cube[posX][posY][posZ], position, direction,
+                  rotationDegrees);
+}
+
 void Cube_drawCube(Cube *cube) {
+  handleAnimating(cube);
   for (unsigned short int x = 0; x < SIZE; x++)
     for (unsigned short int y = 0; y < SIZE; y++)
       for (unsigned short int z = 0; z < SIZE; z++) {
         if (isInnerCubie(x, y, z))
           continue;
-        Cubie_drawCubie(&cube->cube[x][y][z],
-                        (Vector3){x - (float)SIZE / 2 + 0.5f,
-                                  y - (float)SIZE / 2 + 0.5f,
-                                  z - (float)SIZE / 2 + 0.5f});
+        handleAnimation(cube, x, y, z);
       }
 }
 
@@ -184,8 +272,6 @@ void updateCubeFace(Cube *cube, Vector3 dir, Cubie face[SIZE][SIZE]) {
     }
 }
 
-// TODO: why is clockwise rotation equals to anti-clockwise on the cube ?
-// depends on the side !
 void rotate(Cube *cube, Vector3 dir, void (*cubieRotation)(Cubie *),
             bool antiClockwise) {
   Cubie face[SIZE][SIZE];

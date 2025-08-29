@@ -3,7 +3,7 @@
 
 #include "cublet.h"
 
-extern int SIZE;
+extern int SIZE, MAXSIZE, ROTATIONSPEED;
 
 typedef enum Rotations {
   U,
@@ -34,6 +34,9 @@ typedef enum Rotations {
 
 typedef struct Cube {
   Cubie ***cube;
+  bool isAnimating;
+  Rotation currentRotation;
+  int rotationDegrees;
 } Cube;
 
 Cube Cube_make(float cubletSize);
