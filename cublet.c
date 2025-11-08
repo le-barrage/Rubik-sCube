@@ -196,7 +196,96 @@ Cubie_drawCubie (Cubie *cubie, Vector3 position, Vector3 rotationAxis,
               z - cubie->sideLength / 2); // Bottom Right
 
   rlEnd ();
+
+  rlBegin (RL_LINES);
+  rlColor4ub (BLACK.r, BLACK.g, BLACK.b, BLACK.a);
+  rlSetLineWidth (3);
+
+  // Front face
+  //------------------------------------------------------------------
+  // Bottom line
+  rlVertex3f (x - cubie->sideLength / 2, y - cubie->sideLength / 2,
+              z + cubie->sideLength / 2); // Bottom left
+  rlVertex3f (x + cubie->sideLength / 2, y - cubie->sideLength / 2,
+              z + cubie->sideLength / 2); // Bottom right
+
+  // Left line
+  rlVertex3f (x + cubie->sideLength / 2, y - cubie->sideLength / 2,
+              z + cubie->sideLength / 2); // Bottom right
+  rlVertex3f (x + cubie->sideLength / 2, y + cubie->sideLength / 2,
+              z + cubie->sideLength / 2); // Top right
+
+  // Top line
+  rlVertex3f (x + cubie->sideLength / 2, y + cubie->sideLength / 2,
+              z + cubie->sideLength / 2); // Top right
+  rlVertex3f (x - cubie->sideLength / 2, y + cubie->sideLength / 2,
+              z + cubie->sideLength / 2); // Top left
+
+  // Right line
+  rlVertex3f (x - cubie->sideLength / 2, y + cubie->sideLength / 2,
+              z + cubie->sideLength / 2); // Top left
+  rlVertex3f (x - cubie->sideLength / 2, y - cubie->sideLength / 2,
+              z + cubie->sideLength / 2); // Bottom left
+
+  // Back face
+  //------------------------------------------------------------------
+  // Bottom line
+  rlVertex3f (x - cubie->sideLength / 2, y - cubie->sideLength / 2,
+              z - cubie->sideLength / 2); // Bottom left
+  rlVertex3f (x + cubie->sideLength / 2, y - cubie->sideLength / 2,
+              z - cubie->sideLength / 2); // Bottom right
+
+  // Left line
+  rlVertex3f (x + cubie->sideLength / 2, y - cubie->sideLength / 2,
+              z - cubie->sideLength / 2); // Bottom right
+  rlVertex3f (x + cubie->sideLength / 2, y + cubie->sideLength / 2,
+              z - cubie->sideLength / 2); // Top right
+
+  // Top line
+  rlVertex3f (x + cubie->sideLength / 2, y + cubie->sideLength / 2,
+              z - cubie->sideLength / 2); // Top right
+  rlVertex3f (x - cubie->sideLength / 2, y + cubie->sideLength / 2,
+              z - cubie->sideLength / 2); // Top left
+
+  // Right line
+  rlVertex3f (x - cubie->sideLength / 2, y + cubie->sideLength / 2,
+              z - cubie->sideLength / 2); // Top left
+  rlVertex3f (x - cubie->sideLength / 2, y - cubie->sideLength / 2,
+              z - cubie->sideLength / 2); // Bottom left
+
+  // Top face
+  //------------------------------------------------------------------
+  // Left line
+  rlVertex3f (x - cubie->sideLength / 2, y + cubie->sideLength / 2,
+              z + cubie->sideLength / 2); // Top left front
+  rlVertex3f (x - cubie->sideLength / 2, y + cubie->sideLength / 2,
+              z - cubie->sideLength / 2); // Top left back
+
+  // Right line
+  rlVertex3f (x + cubie->sideLength / 2, y + cubie->sideLength / 2,
+              z + cubie->sideLength / 2); // Top right front
+  rlVertex3f (x + cubie->sideLength / 2, y + cubie->sideLength / 2,
+              z - cubie->sideLength / 2); // Top right back
+
+  // Bottom face
+  //------------------------------------------------------------------
+  // Left line
+  rlVertex3f (x - cubie->sideLength / 2, y - cubie->sideLength / 2,
+              z + cubie->sideLength / 2); // Top left front
+  rlVertex3f (x - cubie->sideLength / 2, y - cubie->sideLength / 2,
+              z - cubie->sideLength / 2); // Top left back
+
+  // Right line
+  rlVertex3f (x + cubie->sideLength / 2, y - cubie->sideLength / 2,
+              z + cubie->sideLength / 2); // Top right front
+  rlVertex3f (x + cubie->sideLength / 2, y - cubie->sideLength / 2,
+              z - cubie->sideLength / 2); // Top right back
+  rlEnd ();
+
   rlPopMatrix ();
+
+  DrawCubeWires (position, cubie->sideLength, cubie->sideLength,
+                 cubie->sideLength, BLACK);
 }
 
 char

@@ -699,6 +699,8 @@ main (int argc, char **argv)
   printf ("Rubik's Cube v1.0\n");
   SetTraceLogLevel (LOG_WARNING);
 
+  SetConfigFlags (FLAG_MSAA_4X_HINT); // Anti-Aliasing
+
   SetConfigFlags (FLAG_WINDOW_RESIZABLE);
   InitWindow (1200, 800, "Rubik's Cube");
   SetExitKey (-1);
