@@ -283,9 +283,6 @@ Cubie_drawCubie (Cubie *cubie, Vector3 position, Vector3 rotationAxis,
   rlEnd ();
 
   rlPopMatrix ();
-
-  DrawCubeWires (position, cubie->sideLength, cubie->sideLength,
-                 cubie->sideLength, BLACK);
 }
 
 char
