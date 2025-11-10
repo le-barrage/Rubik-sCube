@@ -153,59 +153,6 @@ getAverageOf5 (char times[5][20], char avg[10])
   snprintf (avg, 17, "%02d:%02d.%03d", minutes, seconds, milliseconds);
 }
 
-// void setDNF(int index, int cubeSize) {
-//   char filename[20];
-//   getFileName(filename, cubeSize);
-//
-//   FILE *fp = fopen(filename, "r");
-//   int lineNumber = countLines(fp);
-//   fclose(fp);
-//
-//   int targetLine = lineNumber < 5 ? index + 1 : lineNumber - 4 + index;
-//
-//   char command[64];
-//   snprintf(command, 64, "sed -i '%d {/^D/! s/.*/DNF(&)/}' times/%d.time",
-//            targetLine, cubeSize);
-//
-//   system(command);
-// }
-// void setPlusTwo(int index, int cubeSize) {
-//   char filename[20], command[86], path[1024];
-//   getFileName(filename, cubeSize);
-//
-//   FILE *fp = fopen(filename, "r");
-//   int lineNumber = countLines(fp);
-//   fclose(fp);
-//
-//   int targetLine = lineNumber < 5 ? index + 1 : lineNumber - 4 + index;
-//   snprintf(command, sizeof(command), "sed -n '%dp' %s", targetLine,
-//   filename);
-//
-//   fp = popen(command, "r");
-//   if (fp == NULL) {
-//     printf("Failed to run command\n");
-//     exit(1);
-//   }
-//
-//   if (fgets(path, sizeof(path), fp) != NULL) {
-//     int time = timeToMillis(path) + 2000;
-//     int minutes = getMinutesFromMillis(time);
-//     int seconds = getSecondsFromMillis(time);
-//     int milliseconds = getMillisFromMillis(time);
-//
-//     char newTime[20];
-//     snprintf(newTime, sizeof(newTime), "%02d:%02d.%03d+", minutes, seconds,
-//              milliseconds);
-//
-//     snprintf(command, sizeof(command), "sed -i '%ds/.*/%s/' %s", targetLine,
-//              newTime, filename);
-//     system(command);
-//   } else
-//     printf("No output from command\n");
-//
-//   pclose(fp);
-// }
-
 void
 setDNF (int index, int cubeSize)
 {
