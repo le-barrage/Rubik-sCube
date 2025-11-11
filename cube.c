@@ -205,6 +205,18 @@ getCorrespondingRotation (char c)
       return S;
     case 's':
       return s;
+    case 'X':
+      return X;
+    case 'x':
+      return x;
+    case 'Y':
+      return Y;
+    case 'y':
+      return y;
+    case 'Z':
+      return Z;
+    case 'z':
+      return z;
     default:
       return -1;
     }
