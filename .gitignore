@@ -1,4 +1,5 @@
-rubiks
+# rubiks
+cRubik
 times/*
 !times/.gitkeep
 build/*
