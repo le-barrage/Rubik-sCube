@@ -21,6 +21,8 @@ Sources:
 - https://github.com/hkociemba/CubeExplorer
 - https://github.com/hishamcse/Rubiks-Cube-Solver
 
+- https://ruwix.com/the-rubiks-cube/rubiks-cube-patterns-algorithms/
+
 ## Current functionalities:
 
 - Cube visualization in 3D (in any NxNxN size):

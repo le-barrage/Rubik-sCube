@@ -8,6 +8,7 @@ typedef struct pattern {
   char *name;
 } pattern;
 
-extern pattern SUPERFLIP, CHECKERBOARD;
+extern pattern patterns[];
+extern const int PATTERNS_COUNT;
 
 #endif // !PATTERN_H

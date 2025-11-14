@@ -29,6 +29,8 @@
 
 #define DEFAULT_FONT_SIZE 20
 
+short SOLUTION_DEPTH = 22;
+
 float camera_mag;
 float camera_mag_vel;
 float camera_theta;
@@ -45,12 +47,12 @@ bool isSolutionRunning = false, isThreadLaunched = false;
 pthread_t solutionThread;
 
 bool showHelp = false, showExitMessageBox = false, showOptions = false,
-     isEverythingLoaded = false;
+     isEverythingLoaded = false, showPatterns = false;
 
 char *helpTexts[] = {
   "Press 'Enter' to scramble the cube.",
-  "Press the corresponding key to move each face (Hold 'alt' down for prime "
-  "moves):",
+  "Press the corresponding key to move each face clockwise (Hold 'alt' down "
+  "for counter-clockwise):",
   "R (right), L (left), U (up), D (down), F (front), B (back).",
   "Press 'K' to find an optimal solution to the cube (only 3x3x3).",
   "Press right mouse button to reset the cube to its original, solved state.",
@@ -60,7 +62,8 @@ char *helpTexts[] = {
   "Press '-' or 'page down' to reduce the cube size and '+' or 'page up' to "
   "increase it.",
 };
-int helpTextsSize = 9;
+int helpTextsSize = sizeof (helpTexts) / sizeof (char *);
+int helpTextsMaxLength;
 
 Timer timer;
 Color timerColor = BLACK;
@@ -160,7 +163,7 @@ findSolutionAndUpdateCurrentSolution ()
   currentSolutionSize = 0;
 
   clock_gettime (CLOCK_MONOTONIC, &start);
-  int error = findSolutionAndUpdateMoves (&cube, 22, 20000);
+  int error = findSolutionAndUpdateMoves (&cube, SOLUTION_DEPTH, 20000);
   clock_gettime (CLOCK_MONOTONIC, &now);
   if (error != 0)
     {
@@ -420,8 +423,14 @@ handleMouseMovementAndUpdateCamera ()
 void
 drawHelpScreen ()
 {
+  int margin = 100;
+  int availableWidth = GetScreenWidth () - margin;
+  int minFontSize = 18;
+  int maxFontSize = 40;
+  int chunkSize = helpTextsMaxLength / 2;
   int fontSize = fmax (
-      fmin (floor ((float)(GetScreenWidth () - 100) / 400) * 10, 40), 18);
+      fmin (floor ((float)availableWidth / chunkSize) * 10, maxFontSize),
+      minFontSize);
 
   ClearBackground (BACKGROUND_COLOR);
   DrawText ("Press 'h' to exit.", 10, 10, DEFAULT_FONT_SIZE, DARKGRAY);
@@ -478,6 +487,62 @@ drawOptionsScreen ()
 }
 
 void
+drawPatternsScreen ()
+{
+  ClearBackground (BACKGROUND_COLOR);
+  int textWidth = MeasureText ("Press 'p' to exit.", DEFAULT_FONT_SIZE);
+  DrawText ("Press 'p' to exit.", GetScreenWidth () - textWidth - 10, 10,
+            DEFAULT_FONT_SIZE, DARKGRAY);
+
+  int buttonWidth = 300;
+  int buttonHeight = 50;
+  int spacing = 20;
+  int columns = 2;
+  int startX
+      = (GetScreenWidth () - (columns * buttonWidth + (columns - 1) * spacing))
+        / 2;
+  int startY = 100;
+  bool isHoveringButton = false;
+
+  for (int i = 0; i < PATTERNS_COUNT; i++)
+    {
+      int row = i / columns;
+      int col = i % columns;
+      int x = startX + col * (buttonWidth + spacing);
+      int y = startY + row * (buttonHeight + spacing);
+
+      Rectangle button = (Rectangle){
+        .x = x, .y = y, .width = buttonWidth, .height = buttonHeight
+      };
+      bool isHovering = CheckCollisionPointRec (GetMousePosition (), button);
+      isHoveringButton |= isHovering;
+
+      if (isHovering)
+        {
+          DrawRectangleRounded (button, 0.2, 0,
+                                ColorBrightness (DARKGRAY, -.1f));
+          if (IsMouseButtonPressed (MOUSE_LEFT_BUTTON))
+            {
+              for (size_t j = 0; j < patterns[i].size; j++)
+                Queue_add (&queue, patterns[i].pattern[j]);
+              showPatterns = false;
+            }
+        }
+      else
+        DrawRectangleRounded (button, 0.2, 0, ColorBrightness (DARKGRAY, .1f));
+
+      int textW = MeasureText (patterns[i].name, DEFAULT_FONT_SIZE);
+      DrawText (patterns[i].name, x + (buttonWidth - textW) / 2,
+                y + (buttonHeight - DEFAULT_FONT_SIZE) / 2, DEFAULT_FONT_SIZE,
+                BLACK);
+    }
+  if (isHoveringButton)
+    SetMouseCursor (MOUSE_CURSOR_POINTING_HAND);
+  else
+    SetMouseCursor (MOUSE_CURSOR_DEFAULT);
+}
+
+void
 DrawTextBoxed (const char *text, float fontSize, int y)
 {
   if (strlen (text) == 0)
@@ -528,6 +593,9 @@ drawCubeScreen ()
   int textWidth = MeasureText ("Press 'o' for options. ", DEFAULT_FONT_SIZE);
   DrawText ("Press 'o' for options.", GetScreenWidth () - textWidth - 10, 10,
             DEFAULT_FONT_SIZE, DARKGRAY);
+  textWidth = MeasureText ("Press 'p' for patterns. ", DEFAULT_FONT_SIZE);
+  DrawText ("Press 'p' for patterns.", GetScreenWidth () - textWidth - 10,
+            10 + DEFAULT_FONT_SIZE, DEFAULT_FONT_SIZE, DARKGRAY);
 
   DrawText ("Current scramble:",
             GetScreenWidth () / 2 - MeasureText ("Current scramble:", 30) / 2,
@@ -594,33 +662,36 @@ drawCubeScreen ()
         }
     }
 
+  bool isHoveringButton = false;
+  int buttonW = 100, buttonH = 30;
+
   if (currentSolutionSize > 0)
     {
-      int recW = 100, recH = 30;
-      Rectangle rec = (Rectangle){ .x = GetScreenWidth () - 2 * recW,
-                                   .y = GetScreenHeight () - 100,
-                                   .width = recW,
-                                   .height = recH };
-      if (CheckCollisionPointRec (GetMousePosition (), rec))
+      Rectangle rec = (Rectangle){ .x = GetScreenWidth () - 2 * buttonW,
+                                   .y = GetScreenHeight () - 75,
+                                   .width = buttonW,
+                                   .height = buttonH };
+      bool isHovering = CheckCollisionPointRec (GetMousePosition (), rec);
+      isHoveringButton = isHoveringButton || isHovering;
+
+      if (isHovering)
         {
-          SetMouseCursor (MOUSE_CURSOR_POINTING_HAND);
           DrawRectangleRounded (rec, 0.5, 0, ColorBrightness (DARKGRAY, -.1f));
           if (IsMouseButtonPressed (MOUSE_LEFT_BUTTON))
-            {
-              applyCurrentSolution ();
-              SetMouseCursor (MOUSE_CURSOR_DEFAULT);
-            }
+            applyCurrentSolution ();
         }
       else
-        {
-          SetMouseCursor (MOUSE_CURSOR_DEFAULT);
-          DrawRectangleRounded (rec, 0.5, 0, ColorBrightness (DARKGRAY, .1f));
-        }
+        DrawRectangleRounded (rec, 0.5, 0, ColorBrightness (DARKGRAY, .1f));
       float fontSize = DEFAULT_FONT_SIZE;
       float textWidth = MeasureText ("Apply", fontSize);
       DrawText ("Apply", rec.x + rec.width / 2 - textWidth / 2,
                 rec.y + rec.height / 2 - fontSize / 2, fontSize, BLACK);
     }
+
+  if (isHoveringButton)
+    SetMouseCursor (MOUSE_CURSOR_POINTING_HAND);
+  else
+    SetMouseCursor (MOUSE_CURSOR_DEFAULT);
 }
 
 void
@@ -664,6 +735,14 @@ initEverything ()
 
   initCurrentScrambleAndSolution ();
 
+  int max = 0;
+  for (int i = 0; i < helpTextsSize; i++)
+    {
+      int t = MeasureText (helpTexts[i], DEFAULT_FONT_SIZE);
+      max = t > max ? t : max;
+    }
+  helpTextsMaxLength = max;
+
   isEverythingLoaded = true;
 
   getAverageOf5 (times, avg);
@@ -674,21 +753,14 @@ initEverything ()
 void
 UpdateDrawFrame ()
 {
-  if (IsKeyPressed (KEY_P))
-    {
-      pattern p = CHECKERBOARD;
-
-      for (size_t i = 0; i < p.size; i++)
-        {
-          Queue_add (&queue, p.pattern[i]);
-        }
-    }
-  if (IsKeyPressed (KEY_H) && !showOptions)
+  if (IsKeyPressed (KEY_H) && !showOptions && !showPatterns)
     showHelp = !showHelp;
-  else if (IsKeyPressed (KEY_O) && !showHelp)
+  else if (IsKeyPressed (KEY_O) && !showHelp && !showPatterns)
     showOptions = !showOptions;
+  else if (IsKeyPressed (KEY_P) && !showOptions && !showHelp)
+    showPatterns = !showPatterns;
 
-  if (!showHelp && !showOptions)
+  if (!showHelp && !showOptions && !showPatterns)
     {
       handleMouseMovementAndUpdateCamera ();
       handleKeyPress ();
@@ -700,6 +772,8 @@ UpdateDrawFrame ()
     drawHelpScreen ();
   else if (showOptions)
     drawOptionsScreen ();
+  else if (showPatterns)
+    drawPatternsScreen ();
   else
     drawCubeScreen ();
   if (showExitMessageBox)
